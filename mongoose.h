@@ -3461,6 +3461,10 @@ struct mg_mgr {
 #if MG_ENABLE_BROADCAST
   sock_t ctl[2]; /* Socketpair for mg_broadcast() */
 #endif
+#if GN_ENABLE_EVENTFD
+  sock_t evfd;
+  void (*evfd_cb)(struct mg_mgr *, uint64_t);
+#endif
   void *user_data; /* User data */
   int num_ifaces;
   struct mg_iface **ifaces; /* network interfaces */
@@ -3537,8 +3541,12 @@ struct mg_connection {
  * could be written in which case `user_data` can hold a pointer to the
  * class instance.
  */
+#if GN_ENABLE_EVENTFD
+void mg_mgr_init(struct mg_mgr *m, void *user_data,
+		void (*cb)(struct mg_mgr *, uint64_t));
+#else
 void mg_mgr_init(struct mg_mgr *mgr, void *user_data);
-
+#endif
 /*
  * Optional parameters to `mg_mgr_init_opt()`.
  *
@@ -3602,6 +3610,11 @@ time_t mg_mgr_poll(struct mg_mgr *, int milli);
  */
 void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
                   size_t len);
+#endif
+
+#if GN_ENABLE_EVENTFD
+#include <sys/eventfd.h>
+void mg_notify(struct mg_mgr *mgr);
 #endif
 
 /*

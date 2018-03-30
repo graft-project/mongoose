@@ -2305,17 +2305,30 @@ void mg_close_conn(struct mg_connection *conn) {
   mg_destroy_conn(conn, 0 /* destroy_if */);
 }
 
+#if GN_ENABLE_EVENTFD
+void mg_mgr_init(struct mg_mgr *m, void *user_data,
+		void (*cb)(struct mg_mgr *, uint64_t)) {
+  struct mg_mgr_init_opts opts;
+  memset(&opts, 0, sizeof(opts));
+  m->evfd_cb = cb;
+  mg_mgr_init_opt(m, user_data, opts);
+}
+#else
 void mg_mgr_init(struct mg_mgr *m, void *user_data) {
   struct mg_mgr_init_opts opts;
   memset(&opts, 0, sizeof(opts));
   mg_mgr_init_opt(m, user_data, opts);
 }
+#endif
 
 void mg_mgr_init_opt(struct mg_mgr *m, void *user_data,
                      struct mg_mgr_init_opts opts) {
   memset(m, 0, sizeof(*m));
 #if MG_ENABLE_BROADCAST
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
+#endif
+#if GN_ENABLE_EVENTFD
+  m->evfd = INVALID_SOCKET;
 #endif
   m->user_data = user_data;
 
@@ -2375,6 +2388,10 @@ void mg_mgr_free(struct mg_mgr *m) {
   if (m->ctl[0] != INVALID_SOCKET) closesocket(m->ctl[0]);
   if (m->ctl[1] != INVALID_SOCKET) closesocket(m->ctl[1]);
   m->ctl[0] = m->ctl[1] = INVALID_SOCKET;
+#endif
+#if GN_ENABLE_EVENTFD
+  if (m->evfd != INVALID_SOCKET) closesocket(m->evfd);
+  m->evfd = INVALID_SOCKET;
 #endif
 
   for (conn = m->active_connections; conn != NULL; conn = tmp_conn) {
@@ -3052,6 +3069,16 @@ void mg_broadcast(struct mg_mgr *mgr, mg_event_handler_t cb, void *data,
 }
 #endif /* MG_ENABLE_BROADCAST */
 
+#if GN_ENABLE_EVENTFD
+void mg_notify(struct mg_mgr *mgr) {
+  if (mgr->evfd != INVALID_SOCKET) {
+    uint64_t poke = 1;
+
+    MG_SEND_FUNC(mgr->evfd, (void *) &poke, sizeof(poke), 0);
+  }
+}
+#endif
+
 static int isbyte(int n) {
   return n >= 0 && n <= 255;
 }
@@ -3713,6 +3740,17 @@ static void mg_mgr_handle_ctl_sock(struct mg_mgr *mgr) {
 }
 #endif
 
+#if GN_ENABLE_EVENTFD
+static void mg_mgr_handle_eventfd_sock(struct mg_mgr *mgr) {
+  uint64_t count = 0;
+  MG_RECV_FUNC(mgr->evfd, (void *) &count, sizeof(count), 0);
+
+  if (mgr->evfd_cb != NULL && count != 0) {
+    mgr->evfd_cb(mgr, count);
+  }
+}
+#endif
+
 /* Associate a socket to a connection. */
 void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
   mg_set_non_blocking_mode(sock);
@@ -3721,11 +3759,20 @@ void mg_socket_if_sock_set(struct mg_connection *nc, sock_t sock) {
   DBG(("%p %d", nc, sock));
 }
 
+#if GN_ENABLE_EVENTFD
+static void mg_eventfd_init(struct mg_mgr *mgr) {
+  mgr->evfd = eventfd(0, EFD_NONBLOCK);
+}
+#endif
+
 void mg_socket_if_init(struct mg_iface *iface) {
   (void) iface;
   DBG(("%p using select()", iface->mgr));
 #if MG_ENABLE_BROADCAST
   mg_socketpair(iface->mgr->ctl, SOCK_DGRAM);
+#endif
+#if GN_ENABLE_EVENTFD
+  mg_eventfd_init(iface->mgr);
 #endif
 }
 
@@ -3772,6 +3819,9 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
   FD_ZERO(&err_set);
 #if MG_ENABLE_BROADCAST
   mg_add_to_set(mgr->ctl[1], &read_set, &max_fd);
+#endif
+#if GN_ENABLE_EVENTFD
+  mg_add_to_set(mgr->evfd, &read_set, &max_fd);
 #endif
 
   /*
@@ -3852,6 +3902,11 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
   if (num_ev > 0 && mgr->ctl[1] != INVALID_SOCKET &&
       FD_ISSET(mgr->ctl[1], &read_set)) {
     mg_mgr_handle_ctl_sock(mgr);
+  }
+#endif
+#if GN_ENABLE_EVENTFD
+  if (num_ev > 0 && mgr->evfd != INVALID_SOCKET && FD_ISSET(mgr->evfd, &read_set)) {
+    mg_mgr_handle_eventfd_sock(mgr);
   }
 #endif
 
