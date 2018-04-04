@@ -2310,8 +2310,8 @@ void mg_mgr_init(struct mg_mgr *m, void *user_data,
 		void (*cb)(struct mg_mgr *, uint64_t)) {
   struct mg_mgr_init_opts opts;
   memset(&opts, 0, sizeof(opts));
-  m->evfd_cb = cb;
   mg_mgr_init_opt(m, user_data, opts);
+  m->evfd_cb = cb;
 }
 #else
 void mg_mgr_init(struct mg_mgr *m, void *user_data) {
