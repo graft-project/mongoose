@@ -42,6 +42,11 @@ public:
 	}
 
 	void OnCryptoDone(CryptoNodeSender* cns);
+
+	static void cb_event(mg_mgr* mgr, uint64_t val)	
+	{
+		
+	}
 };
 
 manager_t manager;
@@ -235,12 +240,13 @@ public:
 	void serve(const char* s_http_port)
 	{
 		mg_mgr& mgr = *manager.get_mg_mgr();
-		mg_mgr_init(&mgr, NULL, 0);
+		mg_mgr_init(&mgr, NULL, manager.cb_event);
 		mg_connection* nc = mg_bind(&mgr, s_http_port, ev_handler);
 		mg_set_protocol_http_websocket(nc);
 		for (;;) 
 		{
-			mg_mgr_poll(&mgr, 1000);
+//			mg_mgr_poll(&mgr, 1000);
+			mg_mgr_poll(&mgr, -1);
 		}
 		mg_mgr_free(&mgr);
 	}
@@ -266,6 +272,8 @@ private:
 				client->user_data = ptr;
 				client->handler = ClientRequest::static_ev_handler;
 				manager.OnNewClient( std::shared_ptr<ClientRequest>(ptr) );
+				///temporary
+				mg_notify(manager.get_mg_mgr());
 			}
 			else
 			{
@@ -315,6 +323,8 @@ class cryptoNodeServer
 public:
 	static void run()
 	{
+		return;
+		
 		mg_mgr mgr;
 		mg_mgr_init(&mgr, NULL, 0);
 		mg_connection *nc = mg_bind(&mgr, "1234", ev_handler);

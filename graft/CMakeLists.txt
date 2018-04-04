@@ -7,7 +7,7 @@ find_package (Threads)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_BUILD_TYPE Debug)
 
-add_definitions(-DGN_ENABLE_EVENTFD=1)
+add_definitions(-DGN_ENABLE_EVENTFD=1 -DMG_USE_READ_WRITE)
 
 add_executable(cpp_server
 	graft_server_example.cpp
