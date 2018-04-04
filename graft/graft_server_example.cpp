@@ -103,7 +103,7 @@ class ClientRequest : public StaticMongooseHandler<ClientRequest>
 		ToThreadPool,
 		AnswerError,
 		Delete,
-		Stop
+//		Stop
 	};
 	
 	using vars_t = std::vector<std::pair<std::string, std::string>>;
@@ -116,11 +116,7 @@ public:
 	
 	State get_state(){ return state; }
 	State set_state(State s){ state = s; }
-/*	
-	ClientRequest() : state(State::None)
-	{
-	}
-*/	
+
 	ClientRequest(mg_connection *client, vars_t& vars) 
 		: vars(vars)
 		, state(State::None)
@@ -176,12 +172,8 @@ struct Route
 	using vars_t = std::vector<std::pair<std::string, std::string>>;
 	using Handler = std::function<bool (vars_t&, std::array<char,100>& , std::array<char,100>& ) >;
 	
-//	static void handle_api_call(struct mg_connection *nc, struct http_message *hm)
-	
 	std::string endpoint;
 	int methods;
-//	Handler handler = ev_handler;
-//	using Handler = std::function<void (mg_connection *nc, http_message *hm) >;
 	Handler handler;
 	
 	
@@ -200,95 +192,11 @@ struct Route
 		, handler([this](vars_t& var, std::array<char,100>& input, std::array<char,100>& output)->bool 
 	{
 		return Route::route_fun(var, input, output);
-//		onHandle(nc, hm); 
 	})
 	
 	{
 	}
-/*	
-	static void ev_handler(struct mg_connection *nc, int ev, void *ev_data)
-	{
-		Route& r = *(Route*)ev_data;
-		r.onHandle(nc);
-	}
-*/	
-	void onHandle(mg_connection *nc, http_message *hm)
-	{
-		char host_port[100];
-		snprintf(host_port, sizeof(host_port), "%s:80", "localhost");
-		
-		mg_connection* s3_conn = mg_connect(nc->mgr, host_port, static_s3_handler);
-		s3_conn->user_data = this;
-		client = nc;
-/*		
-		mg_set_protocol_http_websocket(s3_conn);
-	
-		// Prepare S3 authorization header 
-		snprintf(to_sign, sizeof(to_sign), "%s\n\n%s\n%s\n/%s/%s", method,
-				 content_type, date, bucket, file_name);
-		
-		cs_hmac_sha1((unsigned char *) s_secret_access_key,
-					 strlen(s_secret_access_key), (unsigned char *) to_sign,
-					 strlen(to_sign), (unsigned char *) sha1);
-		mg_base64_encode((unsigned char *) sha1, sizeof(sha1), signature);
-		snprintf(req, sizeof(req),
-				 "%s /%s HTTP/1.1\r\n"
-				 "Host: %s.%s\r\n"
-				 "Date: %s\r\n"
-				 "Content-Type: %s\r\n"
-				 "Content-Length: %lu\r\n"
-				 "Authorization: AWS %s:%s\r\n"
-				 "\r\n",
-				 method, file_name, bucket, host, date, content_type,
-				 (unsigned long) strlen(file_data), s_access_key_id, signature);
-		mg_printf(s3_conn, "%s%s", req, file_data);
-*/		
-		char req[1000];
-		snprintf(req, sizeof(req),
-				 "%s /%s HTTP/1.1\r\n"
-				 //"Host: %s.%s\r\n"
-				 //"Date: %s\r\n"
-				 "Content-Type: %s\r\n"
-				 //"Content-Length: %lu\r\n"
-				 //"Authorization: AWS %s:%s\r\n"
-				 "\r\n", "GET", "exit", "text/plain");
-		mg_printf(s3_conn, "%s%s", req, "");
-	}
-	
-	static void static_s3_handler(mg_connection *nc, int ev, void *ev_data) 
-	{
-		Route* This = static_cast<Route*>(nc->user_data);
-		This->s3_handler(nc, ev, ev_data);
-	}
 
-	mg_connection* client;
-	
-	void s3_handler(struct mg_connection *nc, int ev, void *ev_data) 
-	{
-	  http_message *hm = (http_message *) ev_data;
-	  //struct mg_connection *nc2 = (mg_connection *) nc->user_data;
-	
-	  switch (ev) {
-		case MG_EV_HTTP_REPLY:
-		  if (client != NULL) 
-		  {
-			mg_printf_http_chunk(client, "%s%.*s",
-								 (hm->resp_code == 200 ? "" : "Error: "),
-								 (int) hm->message.len, hm->message.p);
-			mg_send_http_chunk(client, "", 0);
-		  }
-//		  unlink_conns(nc);
-		  nc->flags |= MG_F_SEND_AND_CLOSE;
-		  break;
-		case MG_EV_CLOSE:
-//		  unlink_conns(nc);
-		  break;
-		default:
-		  break;
-	  }
-	}
-	
-	
 };
 
 class Router
@@ -296,7 +204,6 @@ class Router
 	Route route = Route("root/aaa/bb", 0);
 public:
 	Router()
-//		: route(std::string endpoint, int methods)
 	{
 		
 	}
@@ -306,7 +213,6 @@ public:
 		return &route;
 	}
 	
-//	Handler handle = ev_handler;
 	bool match(const std::string& target, int method, std::vector<std::pair<std::string, std::string>>& vars) const
 	{
 		vars.clear();
@@ -323,7 +229,6 @@ class GraftServer final
 	static Router router;
 public:	
 	static Router& get_router() { return router; }
-//	GraftServer(Router& router) : router(router)
 	GraftServer()
 	{ }
 	
