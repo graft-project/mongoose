@@ -34,6 +34,7 @@ public:
 	void OnNewClient(ClientRequest_ptr cr)
 	{
 		newClients.push_back(cr);
+		mg_notify(&mgr);
 	}
 	
 	void OnStateChanged(ClientRequest_ptr cr)
@@ -43,13 +44,16 @@ public:
 
 	void OnCryptoDone(CryptoNodeSender* cns);
 
-	static void cb_event(mg_mgr* mgr, uint64_t val)	
-	{
-		
-	}
+	static void cb_event(mg_mgr* mgr, uint64_t val);
 };
 
 manager_t manager;
+
+void manager_t::cb_event(mg_mgr* mgr, uint64_t val)
+{
+	manager.DoWork();
+}
+
 
 template<typename C>
 class StaticMongooseHandler
@@ -57,9 +61,17 @@ class StaticMongooseHandler
 public:	
 	static void static_ev_handler(mg_connection *nc, int ev, void *ev_data) 
 	{
+		static bool entered = false;
+		assert(!entered); //recursive calls are dangerous
+		entered = true;
 		C* This = static_cast<C*>(nc->user_data);
 		assert(This);
 		This->ev_handler(nc, ev, ev_data);
+		entered = false;
+	}
+	static void static_empty_ev_handler(mg_connection *nc, int ev, void *ev_data)
+	{
+
 	}
 };
 
@@ -126,20 +138,18 @@ public:
 		: vars(vars)
 		, state(State::None)
 		, client(client)
+		, itself(this)
 	{
 	}
-	
-	void setMyPtr(ClientRequest_ptr itself_)
-	{
-		itself = itself_;
-	}
-	
+	ClientRequest_ptr getItself() { return itself; }
 	void AnswerOk()
 	{
 		std::string s("I am answering Ok");
-		mg_send(client,s.c_str(), s.size());
+		mg_send(client, s.c_str(), s.size());
 //		state = State::Stop;
 		client->flags |= MG_F_SEND_AND_CLOSE;
+		client->handler = static_empty_ev_handler;
+		itself.reset();
 	}
 
 public:
@@ -158,18 +168,18 @@ public:
 		} break;
 		case MG_EV_CLOSE:
 		{
+			assert(itself);
 			if(!itself) break;
 			state = State::Delete;
 //			assert(itself);
 			manager.OnStateChanged(itself);
+			client->handler = static_empty_ev_handler;
 			itself.reset();
 		} break;
 		default:
 		  break;
 		}
-		
 	}
-	
 };
 
 struct Route
@@ -271,9 +281,9 @@ private:
 //				ptr->mgr = &mgr;
 				client->user_data = ptr;
 				client->handler = ClientRequest::static_ev_handler;
-				manager.OnNewClient( std::shared_ptr<ClientRequest>(ptr) );
+				manager.OnNewClient( ptr->getItself() );
 				///temporary
-				mg_notify(manager.get_mg_mgr());
+//				mg_notify(manager.get_mg_mgr());
 			}
 			else
 			{
@@ -281,10 +291,12 @@ private:
 				client->flags |= MG_F_SEND_AND_CLOSE;
 			}
 		} break;
+/*
 		case MG_EV_POLL:
 		{
 			manager.DoWork();
 		} break;
+*/
 		default:
 		  break;
 		}
@@ -323,8 +335,6 @@ class cryptoNodeServer
 public:
 	static void run()
 	{
-		return;
-		
 		mg_mgr mgr;
 		mg_mgr_init(&mgr, NULL, 0);
 		mg_connection *nc = mg_bind(&mgr, "1234", ev_handler);
