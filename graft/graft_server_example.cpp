@@ -24,8 +24,12 @@ using CryptoNodeSender_ptr = std::shared_ptr<CryptoNodeSender>;
 class manager_t
 {
 	mg_mgr mgr;
-	std::deque<ClientRequest_ptr> newClients;
-	std::vector<CryptoNodeSender_ptr> cryptoSenders;
+
+	int cntClientRequest = 0;
+	int cntClientRequestDone = 0;
+	int cntCryptoNodeSender = 0;
+	int cntCryptoNodeSenderDone = 0;
+
 public:
 	mg_mgr* get_mg_mgr() { return &mgr; }
 
@@ -33,16 +37,18 @@ public:
 
 	void OnNewClient(ClientRequest_ptr cr)
 	{
-		newClients.push_back(cr);
-		mg_notify(&mgr);
+		++cntClientRequest;
+		SendCrypton(cr);
 	}
-	
-	void OnStateChanged(ClientRequest_ptr cr)
+	void OnClientDone(ClientRequest_ptr cr)
 	{
-		
+		++cntClientRequestDone;
 	}
 
-	void OnCryptoDone(CryptoNodeSender* cns);
+	void OnCryptonDone(CryptoNodeSender* cns);
+
+public:
+	void SendCrypton(ClientRequest_ptr cr);
 
 	static void cb_event(mg_mgr* mgr, uint64_t val);
 };
@@ -103,7 +109,7 @@ public:
 			result = std::string(buf.buf, buf.len);
 			crypton->flags |= MG_F_CLOSE_IMMEDIATELY;
 			
-			manager.OnCryptoDone(this);
+			manager.OnCryptonDone(this);
 		} break;
 		default:
 		  break;
@@ -172,7 +178,7 @@ public:
 			if(!itself) break;
 			state = State::Delete;
 //			assert(itself);
-			manager.OnStateChanged(itself);
+			manager.OnClientDone(itself);
 			client->handler = static_empty_ev_handler;
 			itself.reset();
 		} break;
@@ -305,28 +311,37 @@ private:
 
 Router GraftServer::router;
 
+void manager_t::SendCrypton(ClientRequest_ptr cr)
+{
+	++cntCryptoNodeSender;
+	CryptoNodeSender_ptr cns = std::make_shared<CryptoNodeSender>();
+//	cryptoSenders.push_back(cns);
+	std::string something(100, ' ');
+	{
+		std::string s("something");
+		for(int i=0; i< s.size(); ++i)
+		{
+			something[i] = s[i];
+		}
+	}
+	cns->send(cr, something );
+}
+
+
 void manager_t::DoWork()
 {
+/*
 	if(!newClients.empty())
 	{
 		ClientRequest_ptr cr = newClients.front(); newClients.pop_front();
-		
-		CryptoNodeSender_ptr cns = std::make_shared<CryptoNodeSender>();
-		cryptoSenders.push_back(cns);
-		std::string something(100, ' ');
-		{
-			std::string s("something");
-			for(int i=0; i< s.size(); ++i)
-			{
-				something[i] = s[i];
-			}
-		}
-		cns->send(cr, something );
+		SendCrypton(cr);
 	}
+*/
 }
 
-void manager_t::OnCryptoDone(CryptoNodeSender* cns)
+void manager_t::OnCryptonDone(CryptoNodeSender* cns)
 {
+	++cntCryptoNodeSenderDone;
 	cns->cr->AnswerOk();
 }
 
