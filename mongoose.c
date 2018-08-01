@@ -3904,11 +3904,6 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
     mg_mgr_handle_ctl_sock(mgr);
   }
 #endif
-#if GN_ENABLE_EVENTFD
-  if (num_ev > 0 && mgr->evfd != INVALID_SOCKET && FD_ISSET(mgr->evfd, &read_set)) {
-    mg_mgr_handle_eventfd_sock(mgr);
-  }
-#endif
 
   for (nc = mgr->active_connections; nc != NULL; nc = tmp) {
     int fd_flags = 0;
@@ -3939,6 +3934,12 @@ time_t mg_socket_if_poll(struct mg_iface *iface, int timeout_ms) {
       mg_close_conn(nc);
     }
   }
+
+#if GN_ENABLE_EVENTFD
+  if (num_ev > 0 && mgr->evfd != INVALID_SOCKET && FD_ISSET(mgr->evfd, &read_set)) {
+    mg_mgr_handle_eventfd_sock(mgr);
+  }
+#endif
 
   return (time_t) now;
 }
